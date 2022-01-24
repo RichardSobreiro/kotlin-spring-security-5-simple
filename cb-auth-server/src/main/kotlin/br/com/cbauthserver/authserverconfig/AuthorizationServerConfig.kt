@@ -4,12 +4,11 @@ import br.com.cbauthserver.jwks.KeyGeneratorUtils
 import com.nimbusds.jose.jwk.JWKSet
 import com.nimbusds.jose.jwk.source.JWKSource
 import com.nimbusds.jose.proc.SecurityContext
-import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.Ordered
 import org.springframework.core.annotation.Order
-import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.security.config.Customizer
 import org.springframework.security.config.Customizer.withDefaults
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.OAuth2AuthorizationServerConfiguration
@@ -18,10 +17,8 @@ import org.springframework.security.core.userdetails.User
 import org.springframework.security.core.userdetails.UserDetailsService
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 import org.springframework.security.oauth2.core.AuthorizationGrantType
-import org.springframework.security.oauth2.core.ClientAuthenticationMethod
 import org.springframework.security.oauth2.core.oidc.OidcScopes
 import org.springframework.security.oauth2.jwt.JwtDecoder
-import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository
 import org.springframework.security.oauth2.server.authorization.config.ProviderSettings
@@ -31,25 +28,48 @@ import org.springframework.security.web.SecurityFilterChain
 import java.time.Duration
 import java.util.*
 
-import org.springframework.security.oauth2.server.authorization.JdbcOAuth2AuthorizationService
-import org.springframework.security.oauth2.server.authorization.client.JdbcRegisteredClientRepository
+import org.springframework.security.oauth2.server.authorization.client.InMemoryRegisteredClientRepository
 
 @Configuration(proxyBeanMethods = false)
 class AuthorizationServerConfig(
-    @Autowired
-    val jdbcTemplate: JdbcTemplate
 ) {
-    private val issuerUrl = "http://localhost:8080"
+    private val issuerUrl = "http://auth-server:9000"
+    private val yourClientId = "yourClientId"
+    private val yourSecret = "yourSecret"
 
     @Bean
     @Order(Ordered.HIGHEST_PRECEDENCE)
     fun authorizationServerSecurityFilterChain(http: HttpSecurity): SecurityFilterChain {
-        OAuth2AuthorizationServerConfiguration.applyDefaultSecurity(http.cors().and())
+        OAuth2AuthorizationServerConfiguration.applyDefaultSecurity(http);
+        return http.formLogin(Customizer.withDefaults()).build();
+        /*OAuth2AuthorizationServerConfiguration.applyDefaultSecurity(
+            http.cors().and().csrf().disable().formLogin(Customizer.withDefaults()))*/
 
-        http.cors().and().csrf().disable()
-            .formLogin(withDefaults<FormLoginConfigurer<HttpSecurity>>())
+        /*http.cors().and().csrf().disable()
+            .formLogin(withDefaults<FormLoginConfigurer<HttpSecurity>>())*/
 
         return http.build()
+    }
+
+    @Bean
+    fun registeredClientRepository (): RegisteredClientRepository  {
+        val registeredClient: RegisteredClient = RegisteredClient.withId(UUID.randomUUID().toString())
+            .tokenSettings(
+                TokenSettings.builder()
+                    .accessTokenTimeToLive(Duration.ofMinutes(5))
+                    .refreshTokenTimeToLive(Duration.ofMinutes(10))
+                    .build()
+            )
+            .clientId(yourClientId)
+            .clientSecret(yourSecret)
+            .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+            .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
+            .redirectUri("http://127.0.0.1:8080/login/oauth2/code/messaging-client-oidc")
+            .scope(OidcScopes.OPENID)
+            //.clientSettings(ClientSettings.builder().requireAuthorizationConsent(true).build())
+            .build()
+
+        return InMemoryRegisteredClientRepository(listOf(registeredClient))
     }
 
     @Bean
@@ -73,62 +93,15 @@ class AuthorizationServerConfig(
     fun passwordEncoder() = BCryptPasswordEncoder(10)
 
     @Bean
-    fun registeredClientRepository(
-        passwordEncoder: BCryptPasswordEncoder
-    ): RegisteredClientRepository {
-        val registeredClientRepository = JdbcRegisteredClientRepository(jdbcTemplate)
-        val registeredClientParametersMapper = JdbcRegisteredClientRepository.RegisteredClientParametersMapper()
-        val yourClientId = "yourClientId"
-        val yourSecret = "yourSecret"
-
-        registeredClientParametersMapper.setPasswordEncoder(passwordEncoder)
-        registeredClientRepository.setRegisteredClientParametersMapper(registeredClientParametersMapper)
-
-        if (registeredClientRepository.findByClientId(yourClientId) == null) {
-            val registeredClient: RegisteredClient = RegisteredClient.withId(UUID.randomUUID().toString())
-                .tokenSettings(
-                    TokenSettings.builder()
-                        .accessTokenTimeToLive(Duration.ofMinutes(5))
-                        .refreshTokenTimeToLive(Duration.ofMinutes(10))
-                        .build()
-                )
-                .clientId(yourClientId)
-                .clientSecret(yourSecret)
-                .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
-                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
-                .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
-                .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
-                .redirectUri("http://127.0.0.1:8081/authorized")
-                .redirectUri("https://oauth.pstmn.io/v1/callback")
-                .scope(OidcScopes.OPENID)
-                .scope("")
-                .scope("yourapplication.read")
-                .scope("yourapplication.write")
-                .build()
-
-            registeredClientRepository.save(registeredClient)
-        }
-
-        return registeredClientRepository
-    }
-
-    @Bean
-    fun authorizationService(
-        registeredClientRepository: RegisteredClientRepository
-    ): OAuth2AuthorizationService {
-        return JdbcOAuth2AuthorizationService(jdbcTemplate, registeredClientRepository)
-    }
-
-    @Bean
     fun users(): UserDetailsService {
         val user = User.builder()
             .username("pele")
-            .password("{bcrypt}\$2a\$10\$b.Rm.8NeuT7hS3Qwy1RPGuuHNMzjEk01vM7ExvW/h11KAHainYBfK")
+            .password("\$2a\$10\$b.Rm.8NeuT7hS3Qwy1RPGuuHNMzjEk01vM7ExvW/h11KAHainYBfK")
             .roles("USER")
             .build()
         val admin = User.builder()
             .username("garrincha")
-            .password("{bcrypt}\$2a\$10\$b.Rm.8NeuT7hS3Qwy1RPGuuHNMzjEk01vM7ExvW/h11KAHainYBfK")
+            .password("\$2a\$10\$b.Rm.8NeuT7hS3Qwy1RPGuuHNMzjEk01vM7ExvW/h11KAHainYBfK")
             .roles("USER", "ADMIN")
             .build()
         return InMemoryUserDetailsManager(user, admin)
