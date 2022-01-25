@@ -17,6 +17,7 @@ import org.springframework.security.core.userdetails.User
 import org.springframework.security.core.userdetails.UserDetailsService
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 import org.springframework.security.oauth2.core.AuthorizationGrantType
+import org.springframework.security.oauth2.core.ClientAuthenticationMethod
 import org.springframework.security.oauth2.core.oidc.OidcScopes
 import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient
@@ -54,6 +55,20 @@ class AuthorizationServerConfig(
     @Bean
     fun registeredClientRepository (): RegisteredClientRepository  {
         val registeredClient: RegisteredClient = RegisteredClient.withId(UUID.randomUUID().toString())
+            .clientId(yourClientId)
+            .clientSecret(passwordEncoder().encode("yourSecret"))
+            .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+            .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
+            .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
+            .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
+            .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_POST)
+            .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_JWT)
+            .redirectUri("http://127.0.0.1:8080/login/oauth2/code/messaging-client-oidc")
+            .scope(OidcScopes.OPENID)
+            //.clientSettings(ClientSettings.builder().requireAuthorizationConsent(true).build())
+            .build()
+
+        /*val registeredClient: RegisteredClient = RegisteredClient.withId(UUID.randomUUID().toString())
             .tokenSettings(
                 TokenSettings.builder()
                     .accessTokenTimeToLive(Duration.ofMinutes(5))
@@ -61,13 +76,18 @@ class AuthorizationServerConfig(
                     .build()
             )
             .clientId(yourClientId)
-            .clientSecret(yourSecret)
+            .clientSecret(passwordEncoder().encode("yourSecret"))
+            //.clientSecret("yourSecret")
             .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
             .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
+            .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
+            .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
+            .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_POST)
+            .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_JWT)
             .redirectUri("http://127.0.0.1:8080/login/oauth2/code/messaging-client-oidc")
             .scope(OidcScopes.OPENID)
             //.clientSettings(ClientSettings.builder().requireAuthorizationConsent(true).build())
-            .build()
+            .build()*/
 
         return InMemoryRegisteredClientRepository(listOf(registeredClient))
     }
@@ -97,11 +117,13 @@ class AuthorizationServerConfig(
         val user = User.builder()
             .username("pele")
             .password("\$2a\$10\$b.Rm.8NeuT7hS3Qwy1RPGuuHNMzjEk01vM7ExvW/h11KAHainYBfK")
+            //.password("123456")
             .roles("USER")
             .build()
         val admin = User.builder()
             .username("garrincha")
             .password("\$2a\$10\$b.Rm.8NeuT7hS3Qwy1RPGuuHNMzjEk01vM7ExvW/h11KAHainYBfK")
+            //.password("123456")
             .roles("USER", "ADMIN")
             .build()
         return InMemoryUserDetailsManager(user, admin)
